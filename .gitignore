@@ -34,3 +34,6 @@ appsettings.Development.json
 # Runtime
 publish/
 EOF
+# Visual Studio
+Properties/launchSettings.json
+*.http
