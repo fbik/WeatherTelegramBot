@@ -1,3 +1,4 @@
+using Telegram.Bot;  // ← ДОБАВЬТЕ ЭТУ СТРОКУ В НАЧАЛЕ
 using WeatherTelegramBot.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,6 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IWeatherService, WeatherService>();
+
+builder.Services.AddSingleton<ITelegramBotClient>(provider =>
+{
+    var token = builder.Configuration["TelegramBotSettings:BotToken"];
+    return new TelegramBotClient(token);
+});
 
 // Существующие сервисы Swagger
 builder.Services.AddEndpointsApiExplorer();
