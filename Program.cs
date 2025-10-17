@@ -91,6 +91,12 @@ public class UpdateHandler : IUpdateHandler
                                   "/weather <город> - узнать погоду\n" +
                                   "Или просто отправьте название города",
                             cancellationToken: cancellationToken);
+                        await botClient.SendMessage(chatId, "Choose a response", replyMarkup: new string[][]
+                        {
+                            ["Voronezh"],
+                            ["Moscow", "Stockholm"],
+                            ["Moscow", "Stockholm", "Berlin"],
+                        });
                         break;
 
                     case "/weather":
