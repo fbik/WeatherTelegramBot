@@ -51,8 +51,7 @@ var receiverOptions = new ReceiverOptions
 };
 
 botClient.StartReceiving(
-    updateHandler: updateHandler.HandleUpdateAsync,
-    pollingErrorHandler: updateHandler.HandlePollingErrorAsync,
+    updateHandler: updateHandler,
     receiverOptions: receiverOptions
 );
 
@@ -76,7 +75,7 @@ public class UpdateHandler : IUpdateHandler
         {
             var chatId = update.Message.Chat.Id;
             var text = update.Message.Text.Trim();
-
+            
             Console.WriteLine($"📨 Received: {text}");
 
             try
@@ -132,6 +131,12 @@ public class UpdateHandler : IUpdateHandler
         }
     }
 
+    public Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, HandleErrorSource source,
+        CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
     private async Task HandleWeatherRequest(long chatId, string city, CancellationToken cancellationToken)
     {
         try
@@ -168,11 +173,5 @@ public class UpdateHandler : IUpdateHandler
             Console.WriteLine($"❌ HandleWeatherRequest error: {ex.Message}");
             await _botClient.SendTextMessageAsync(chatId, "❌ Ошибка получения данных о погоде. Попробуйте позже.", cancellationToken: cancellationToken);
         }
-    }
-
-    public async Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
-    {
-        Console.WriteLine($"❌ Telegram Polling Error: {exception.Message}");
-        await Task.CompletedTask;
     }
 }
