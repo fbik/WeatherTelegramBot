@@ -1,9 +1,11 @@
-using Telegram.Bot;  // ← ДОБАВЬТЕ ЭТУ СТРОКУ В НАЧАЛЕ
+using Telegram.Bot;
+using Telegram.Bot.Polling;
+using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using WeatherTelegramBot.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Добавление сервисов в контейнер
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IWeatherService, WeatherService>();
@@ -11,16 +13,22 @@ builder.Services.AddScoped<IWeatherService, WeatherService>();
 builder.Services.AddSingleton<ITelegramBotClient>(provider =>
 {
     var token = builder.Configuration["TelegramBotSettings:BotToken"];
+    
+    if (string.IsNullOrEmpty(token) || token == "YOUR_BOT_TOKEN_HERE")
+    {
+        throw new ArgumentNullException(nameof(token), "Bot token is not configured");
+    }
+    
+    Console.WriteLine($"✅ Telegram Bot Client initialized");
     return new TelegramBotClient(token);
 });
 
-// Существующие сервисы Swagger
+builder.Services.AddScoped<UpdateHandler>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Настройка конвейера HTTP запросов
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -31,7 +39,140 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
-// Простой эндпоинт для проверки работы
-app.MapGet("/", () => "Weather Telegram Bot is running! Use Telegram to interact with the bot.");
+app.MapGet("/", () => "Weather Telegram Bot is running!");
 
+// Запускаем polling
+var botClient = app.Services.GetRequiredService<ITelegramBotClient>();
+var updateHandler = app.Services.GetRequiredService<UpdateHandler>();
+
+var receiverOptions = new ReceiverOptions
+{
+    AllowedUpdates = new[] { UpdateType.Message }
+};
+
+botClient.StartReceiving(
+    updateHandler: updateHandler.HandleUpdateAsync,
+    pollingErrorHandler: updateHandler.HandlePollingErrorAsync,
+    receiverOptions: receiverOptions
+);
+
+Console.WriteLine("🤖 Bot started with Polling");
 app.Run();
+
+public class UpdateHandler : IUpdateHandler
+{
+    private readonly ITelegramBotClient _botClient;
+    private readonly IWeatherService _weatherService;
+
+    public UpdateHandler(ITelegramBotClient botClient, IWeatherService weatherService)
+    {
+        _botClient = botClient;
+        _weatherService = weatherService;
+    }
+
+    public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
+    {
+        if (update.Message?.Text != null)
+        {
+            var chatId = update.Message.Chat.Id;
+            var text = update.Message.Text.Trim();
+
+            Console.WriteLine($"📨 Received: {text}");
+
+            try
+            {
+                switch (text.ToLower())
+                {
+                    case "/start":
+                        await botClient.SendTextMessageAsync(
+                            chatId: chatId,
+                            text: "🌤️ Добро пожаловать в погодный бот!\n\n" +
+                                  "Доступные команды:\n" +
+                                  "/start - показать это сообщение\n" +
+                                  "/weather <город> - узнать погоду\n" +
+                                  "Или просто отправьте название города",
+                            cancellationToken: cancellationToken);
+                        break;
+
+                    case "/weather":
+                        await botClient.SendTextMessageAsync(
+                            chatId: chatId,
+                            text: "❓ Укажите город после команды:\n/weather Москва",
+                            cancellationToken: cancellationToken);
+                        break;
+
+                    case var cmd when text.StartsWith("/weather "):
+                        var cityName = text.Substring(9).Trim();
+                        await HandleWeatherRequest(chatId, cityName, cancellationToken);
+                        break;
+
+                    default:
+                        if (text.StartsWith("/"))
+                        {
+                            await botClient.SendTextMessageAsync(
+                                chatId: chatId,
+                                text: "❌ Неизвестная команда. Используйте /start для списка команд",
+                                cancellationToken: cancellationToken);
+                        }
+                        else
+                        {
+                            await HandleWeatherRequest(chatId, text, cancellationToken);
+                        }
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                await botClient.SendTextMessageAsync(
+                    chatId: chatId,
+                    text: "❌ Произошла ошибка. Попробуйте позже.",
+                    cancellationToken: cancellationToken);
+                Console.WriteLine($"❌ Error: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task HandleWeatherRequest(long chatId, string city, CancellationToken cancellationToken)
+    {
+        try
+        {
+            Console.WriteLine($"🔍 Starting weather request for: {city}");
+            
+            // Простая версия без лишних параметров
+            await _botClient.SendChatActionAsync(chatId, ChatAction.Typing);
+            
+            var weather = await _weatherService.GetWeatherAsync(city);
+            
+            Console.WriteLine($"📊 Weather service returned: {weather != null}");
+            
+            if (weather != null && weather.Main != null)
+            {
+                Console.WriteLine($"✅ Weather data: {weather.Name}, Temp: {weather.Main.Temp}");
+                
+                var response = $"🌤️ Погода в {weather.Name}:\n" +
+                              $"🌡️ Температура: {weather.Main.Temp}°C\n" +
+                              $"💧 Влажность: {weather.Main.Humidity}%\n" +
+                              $"💨 Ветер: {weather.Wind?.Speed:F1} м/с\n" +
+                              $"☁️ {weather.Weather?[0].Description}";
+
+                await _botClient.SendTextMessageAsync(chatId, response, cancellationToken: cancellationToken);
+            }
+            else
+            {
+                Console.WriteLine($"❌ Weather data is null");
+                await _botClient.SendTextMessageAsync(chatId, $"❌ Не удалось получить погоду для '{city}'. Попробуйте другой город.", cancellationToken: cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ HandleWeatherRequest error: {ex.Message}");
+            await _botClient.SendTextMessageAsync(chatId, "❌ Ошибка получения данных о погоде. Попробуйте позже.", cancellationToken: cancellationToken);
+        }
+    }
+
+    public async Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+    {
+        Console.WriteLine($"❌ Telegram Polling Error: {exception.Message}");
+        await Task.CompletedTask;
+    }
+}
