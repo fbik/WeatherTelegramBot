@@ -1,4 +1,4 @@
-using System.Text.Json;
+ using System.Text.Json;
 using WeatherTelegramBot.Models;
 
 namespace WeatherTelegramBot.Services;
@@ -28,57 +28,43 @@ public class WeatherService : IWeatherService
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"📄 JSON received, length: {json.Length}");
+                Console.WriteLine($"📄 JSON received");
                 
-                // ДЛЯ ДЕБАГА: выведем весь JSON
-                Console.WriteLine($"📋 FULL JSON: {json}");
-                
+                // Парсим реальный JSON
                 var weatherData = JsonSerializer.Deserialize<WeatherApiResponse>(json, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
                 
-                if (weatherData != null && weatherData.Location != null && weatherData.Current != null)
+                if (weatherData?.location != null && weatherData.current != null)
                 {
-                    Console.WriteLine($"✅ Successfully parsed weather data");
-                    Console.WriteLine($"📍 City: {weatherData.Location.Name}");
-                    Console.WriteLine($"🌡️ TempC: {weatherData.Current.TempC}");
-                    Console.WriteLine($"💧 Humidity: {weatherData.Current.Humidity}");
-                    Console.WriteLine($"💨 WindKph: {weatherData.Current.WindKph}");
+                    Console.WriteLine($"✅ Real data - City: {weatherData.location.name}, Temp: {weatherData.current.temp_c}°C");
                     
                     return new WeatherResponse
                     {
-                        Name = weatherData.Location.Name ?? city,
+                        Name = weatherData.location.name ?? city,
                         Main = new MainData
                         {
-                            Temp = weatherData.Current.TempC,
-                            Humidity = weatherData.Current.Humidity,
-                            Feels_Like = weatherData.Current.FeelslikeC
+                            Temp = weatherData.current.temp_c,
+                            Humidity = weatherData.current.humidity,
+                            Feels_Like = weatherData.current.feelslike_c
                         },
                         Weather = new[]
                         {
                             new Weather
                             {
-                                Main = weatherData.Current.Condition?.Text,
-                                Description = weatherData.Current.Condition?.Text
+                                Description = weatherData.current.condition?.text
                             }
                         },
                         Wind = new Wind
                         {
-                            Speed = weatherData.Current.WindKph / 3.6 // км/ч → м/с
+                            Speed = weatherData.current.wind_kph / 3.6 // км/ч → м/с
                         }
                     };
                 }
-                else
-                {
-                    Console.WriteLine("❌ Failed to deserialize JSON or missing data");
-                }
-            }
-            else
-            {
-                Console.WriteLine($"❌ API error: {response.StatusCode}");
             }
             
+            Console.WriteLine($"❌ API error: {response.StatusCode}");
             return null;
         }
         catch (Exception ex)
@@ -89,28 +75,28 @@ public class WeatherService : IWeatherService
     }
 }
 
-// Модели для WeatherAPI - ДОЛЖНЫ ТОЧНО СОВПАДАТЬ С JSON
+// Модели ТОЧНО как в JSON (нижний регистр!)
 public class WeatherApiResponse
 {
-    public Location? Location { get; set; }
-    public Current? Current { get; set; }
+    public Location? location { get; set; }
+    public Current? current { get; set; }
 }
 
 public class Location
 {
-    public string? Name { get; set; }
+    public string? name { get; set; }
 }
 
 public class Current
 {
-    public double Temp_C { get; set; }  // ← ВНИМАНИЕ: Temp_C а не TempC!
-    public int Humidity { get; set; }
-    public double Feelslike_C { get; set; }  // ← Feelslike_C а не FeelslikeC!
-    public double Wind_Kph { get; set; }  // ← Wind_Kph а не WindKph!
-    public Condition? Condition { get; set; }
+    public double temp_c { get; set; }
+    public int humidity { get; set; }
+    public double feelslike_c { get; set; }
+    public double wind_kph { get; set; }
+    public Condition? condition { get; set; }
 }
 
 public class Condition
 {
-    public string? Text { get; set; }
+    public string? text { get; set; }
 }
