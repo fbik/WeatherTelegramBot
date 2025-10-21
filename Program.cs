@@ -2,6 +2,7 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
 using WeatherTelegramBot.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,7 +48,7 @@ var updateHandler = app.Services.GetRequiredService<UpdateHandler>();
 
 var receiverOptions = new ReceiverOptions
 {
-    AllowedUpdates = new[] { UpdateType.Message }
+    AllowedUpdates = new[] { UpdateType.Message, UpdateType.CallbackQuery }
 };
 
 botClient.StartReceiving(
@@ -56,7 +57,7 @@ botClient.StartReceiving(
     receiverOptions: receiverOptions
 );
 
-Console.WriteLine("🤖 Bot started with Polling");
+Console.WriteLine("🤖 Bot started with Polling and Buttons!");
 app.Run();
 
 public class UpdateHandler : IUpdateHandler
@@ -72,6 +73,13 @@ public class UpdateHandler : IUpdateHandler
 
     public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
     {
+        // Обработка callback от кнопок
+        if (update.CallbackQuery != null)
+        {
+            await HandleCallbackQuery(update.CallbackQuery, cancellationToken);
+            return;
+        }
+
         if (update.Message?.Text != null)
         {
             var chatId = update.Message.Chat.Id;
@@ -84,14 +92,7 @@ public class UpdateHandler : IUpdateHandler
                 switch (text.ToLower())
                 {
                     case "/start":
-                        await botClient.SendTextMessageAsync(
-                            chatId: chatId,
-                            text: "🌤️ Добро пожаловать в погодный бот!\n\n" +
-                                  "Доступные команды:\n" +
-                                  "/start - показать это сообщение\n" +
-                                  "/weather <город> - узнать погоду\n" +
-                                  "Или просто отправьте название города",
-                            cancellationToken: cancellationToken);
+                        await ShowMainMenu(chatId, cancellationToken);
                         break;
 
                     case "/weather":
@@ -104,6 +105,10 @@ public class UpdateHandler : IUpdateHandler
                     case var cmd when text.StartsWith("/weather "):
                         var cityName = text.Substring(9).Trim();
                         await HandleWeatherRequest(chatId, cityName, cancellationToken);
+                        break;
+
+                    case "/cities":
+                        await ShowCitiesMenu(chatId, cancellationToken);
                         break;
 
                     default:
@@ -132,13 +137,74 @@ public class UpdateHandler : IUpdateHandler
         }
     }
 
+    private async Task ShowMainMenu(long chatId, CancellationToken cancellationToken)
+    {
+        var menuText = "🌤️ Добро пожаловать в погодный бот!\n\n" +
+                       "Доступные команды:\n" +
+                       "📍 /cities - Популярные города\n" +
+                       "🔍 /weather <город> - Узнать погоду\n" +
+                       "📝 Или просто отправьте название города";
+
+        await _botClient.SendTextMessageAsync(
+            chatId: chatId,
+            text: menuText,
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task ShowCitiesMenu(long chatId, CancellationToken cancellationToken)
+    {
+        var keyboard = new InlineKeyboardMarkup(new[]
+        {
+        new[]
+        {
+            InlineKeyboardButton.WithCallbackData("🌆 Москва", "city_Moscow"),
+            InlineKeyboardButton.WithCallbackData("🏙️ СПб", "city_St Petersburg")
+        },
+        new[]
+        {
+            InlineKeyboardButton.WithCallbackData("🗽 Нью-Йорк", "city_New York"),
+            InlineKeyboardButton.WithCallbackData("🇬🇧 Лондон", "city_London")
+        },
+        new[]
+        {
+            InlineKeyboardButton.WithCallbackData("🗼 Париж", "city_Paris"),
+            InlineKeyboardButton.WithCallbackData("🇸🇪 Стокгольм", "city_Stockholm")
+        },
+        new[]
+        {
+            InlineKeyboardButton.WithCallbackData("🏙️ Дубай", "city_Dubai"),
+            InlineKeyboardButton.WithCallbackData("🏔️ Воронеж", "city_Voronezh")
+        }
+    });
+
+        await _botClient.SendTextMessageAsync(
+            chatId: chatId,
+            text: "📍 Выберите город:",
+            replyMarkup: keyboard,
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task HandleCallbackQuery(CallbackQuery callbackQuery, CancellationToken cancellationToken)
+    {
+        var chatId = callbackQuery.Message.Chat.Id;
+        var data = callbackQuery.Data;
+
+        Console.WriteLine($"🔘 Callback received: {data}");
+
+        if (data.StartsWith("city_"))
+        {
+            var city = data.Substring(5); // Убираем "city_"
+            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
+            await HandleWeatherRequest(chatId, city, cancellationToken);
+        }
+    }
+
     private async Task HandleWeatherRequest(long chatId, string city, CancellationToken cancellationToken)
     {
         try
         {
             Console.WriteLine($"🔍 Starting weather request for: {city}");
             
-            // Простая версия без лишних параметров
             await _botClient.SendChatActionAsync(chatId, ChatAction.Typing);
             
             var weather = await _weatherService.GetWeatherAsync(city);
@@ -155,18 +221,37 @@ public class UpdateHandler : IUpdateHandler
                               $"💨 Ветер: {weather.Wind?.Speed:F1} м/с\n" +
                               $"☁️ {weather.Weather?[0].Description}";
 
-                await _botClient.SendTextMessageAsync(chatId, response, cancellationToken: cancellationToken);
+                // Добавляем кнопку для выбора другого города
+                var keyboard = new InlineKeyboardMarkup(new[]
+                {
+                    new[]
+                    {
+                        InlineKeyboardButton.WithCallbackData("📍 Выбрать другой город", "show_cities")
+                    }
+                });
+
+                await _botClient.SendTextMessageAsync(
+                    chatId: chatId,
+                    text: response,
+                    replyMarkup: keyboard,
+                    cancellationToken: cancellationToken);
             }
             else
             {
                 Console.WriteLine($"❌ Weather data is null");
-                await _botClient.SendTextMessageAsync(chatId, $"❌ Не удалось получить погоду для '{city}'. Попробуйте другой город.", cancellationToken: cancellationToken);
+                await _botClient.SendTextMessageAsync(
+                    chatId: chatId, 
+                    $"❌ Не удалось получить погоду для '{city}'. Попробуйте другой город.",
+                    cancellationToken: cancellationToken);
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ HandleWeatherRequest error: {ex.Message}");
-            await _botClient.SendTextMessageAsync(chatId, "❌ Ошибка получения данных о погоде. Попробуйте позже.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(
+                chatId: chatId, 
+                "❌ Ошибка получения данных о погоде. Попробуйте позже.",
+                cancellationToken: cancellationToken);
         }
     }
 
