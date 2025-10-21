@@ -2,10 +2,10 @@ namespace WeatherTelegramBot.Models;
 
 public class WeatherResponse
 {
-    public MainData? Main { get; set; }      // ← добавить ?
-    public Weather[]? Weather { get; set; }  // ← добавить ?
-    public Wind? Wind { get; set; }          // ← добавить ?
-    public string? Name { get; set; }        // ← добавить ?
+    public string? Name { get; set; }
+    public MainData? Main { get; set; }
+    public Weather[]? Weather { get; set; }
+    public Wind? Wind { get; set; }
 }
 
 public class MainData
@@ -17,8 +17,8 @@ public class MainData
 
 public class Weather
 {
-    public string? Main { get; set; }        // ← добавить ?
-    public string? Description { get; set; } // ← добавить ?
+    public string? Main { get; set; }
+    public string? Description { get; set; }
 }
 
 public class Wind
