@@ -182,6 +182,11 @@ public class UpdateHandler : IUpdateHandler
                 InlineKeyboardButton.WithCallbackData("🏙️ Париж", "city_Paris"),
                 InlineKeyboardButton.WithCallbackData("🏙️ Стокгольм", "city_Stockholm")
             },
+            new[] 
+        {
+            InlineKeyboardButton.WithCallbackData("🏙️ Бишкек", "city_Bishkek"),
+            InlineKeyboardButton.WithCallbackData("🏙️ София", "city_Sofia")
+        },
             new[]
             {
                 InlineKeyboardButton.WithCallbackData("🏙️ Дубай", "city_Dubai"),
