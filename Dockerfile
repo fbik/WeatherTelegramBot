@@ -1,22 +1,18 @@
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+WORKDIR /app
+EXPOSE 8080
+
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-
-# Копируем project file и восстанавливаем зависимости
-COPY *.csproj .
-RUN dotnet restore
-
-# Копируем весь код и собираем
+COPY ["WeatherTelegramBot.csproj", "."]
+RUN dotnet restore "WeatherTelegramBot.csproj"
 COPY . .
-RUN dotnet publish -c Release -o /app/publish
+RUN dotnet build "WeatherTelegramBot.csproj" -c Release -o /app/build
 
-# Финальный образ
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM build AS publish
+RUN dotnet publish "WeatherTelegramBot.csproj" -c Release -o /app/publish
+
+FROM base AS final
 WORKDIR /app
-COPY --from=build /app/publish .
-
-# Открываем порт
-EXPOSE 8080
-ENV ASPNETCORE_URLS=http://*:8080
-
-# Запускаем приложение
+COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "WeatherTelegramBot.dll"]

@@ -57,7 +57,7 @@ botClient.StartReceiving(
 );
 
 Console.WriteLine("🤖 Bot started with Polling, Buttons and 5-Day Forecast!");
-app.Run();
+app.Run("http://0.0.0.0:8080");
 
 public class UpdateHandler : IUpdateHandler
 {
