@@ -84,7 +84,7 @@ public class UpdateHandler : IUpdateHandler
             var chatId = update.Message.Chat.Id;
             var text = update.Message.Text.Trim();
 
-            Console.WriteLine($"📨 Received: {text}");
+          //  Console.WriteLine($"📨 Received: {text}");
 
             try
             {
@@ -231,17 +231,17 @@ public class UpdateHandler : IUpdateHandler
     {
         try
         {
-            Console.WriteLine($"🌤️ Starting weather request for: {city}");
+            //Console.WriteLine($"🌤️ Starting weather request for: {city}");
 
             await _botClient.SendChatActionAsync(chatId, ChatAction.Typing);
 
             var weather = await _weatherService.GetWeatherAsync(city);
 
-            Console.WriteLine($"📊 Weather service returned: {weather != null}");
+           // Console.WriteLine($"📊 Weather service returned: {weather != null}");
 
             if (weather != null && weather.Main != null)
             {
-                Console.WriteLine($"✅ Weather data: {weather.Name}, Temp: {weather.Main.Temp}");
+               // Console.WriteLine($"✅ Weather data: {weather.Name}, Temp: {weather.Main.Temp}");
 
                 var response = $"🌤️ Погода в {weather.Name}:\n" +
                               $"🌡️ Температура: {weather.Main.Temp}°C\n" +

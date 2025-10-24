@@ -84,7 +84,7 @@ public class WeatherService : IWeatherService
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"📊 Forecast JSON received");
+                //Console.WriteLine($"📊 Forecast JSON received");
 
                 var forecastData = JsonSerializer.Deserialize<ForecastApiResponse>(json, new JsonSerializerOptions
                 {
@@ -99,7 +99,7 @@ public class WeatherService : IWeatherService
                     var day4 = forecastData.forecast.forecastday[3];
                     var day5 = forecastData.forecast.forecastday[4];
 
-                    Console.WriteLine($"✅ Forecast parsed for: {forecastData.location?.name}");
+                    //Console.WriteLine($"✅ Forecast parsed for: {forecastData.location?.name}");
 
                     return new WeatherForecast
                     {
