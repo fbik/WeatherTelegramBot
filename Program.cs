@@ -231,7 +231,7 @@ public class UpdateHandler : IUpdateHandler
     {
         try
         {
-            //Console.WriteLine($"🌤️ Starting weather request for: {city}");
+            Console.WriteLine($"🌤️ Starting weather request for: {city}");
 
             await _botClient.SendChatActionAsync(chatId, ChatAction.Typing);
 
