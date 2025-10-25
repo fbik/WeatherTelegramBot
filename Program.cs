@@ -20,7 +20,6 @@ builder.Services.AddSingleton<ITelegramBotClient>(provider =>
         throw new ArgumentNullException(nameof(token), "Bot token is not configured");
     }
 
-    Console.WriteLine($"✅ Telegram Bot Client initialized");
     return new TelegramBotClient(token);
 });
 
@@ -42,7 +41,6 @@ app.MapControllers();
 
 app.MapGet("/", () => "Weather Telegram Bot is running!");
 
-// Запускаем polling
 var botClient = app.Services.GetRequiredService<ITelegramBotClient>();
 var updateHandler = app.Services.GetRequiredService<UpdateHandler>();
 var receiverOptions = new ReceiverOptions
@@ -55,14 +53,14 @@ botClient.StartReceiving(
     pollingErrorHandler: updateHandler.HandlePollingErrorAsync,
     receiverOptions: receiverOptions
 );
-
-Console.WriteLine("🤖 Bot started with Polling, Buttons and 5-Day Forecast!");
-app.Run("http://0.0.0.0:8080");
+Console.WriteLine("✅ Bot started with Polling, Buttons and 5-Day Forecast!");
+app.Run();
 
 public class UpdateHandler : IUpdateHandler
 {
     private readonly ITelegramBotClient _botClient;
     private readonly IWeatherService _weatherService;
+    private static bool _unauthorizedLogged = false; // Статическая переменная для однократного логирования
 
     public UpdateHandler(ITelegramBotClient botClient, IWeatherService weatherService)
     {
@@ -72,7 +70,6 @@ public class UpdateHandler : IUpdateHandler
 
     public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
     {
-        // Обработка callback от кнопок
         if (update.CallbackQuery != null)
         {
             await HandleCallbackQuery(update.CallbackQuery, cancellationToken);
@@ -83,8 +80,6 @@ public class UpdateHandler : IUpdateHandler
         {
             var chatId = update.Message.Chat.Id;
             var text = update.Message.Text.Trim();
-
-          //  Console.WriteLine($"📨 Received: {text}");
 
             try
             {
@@ -97,14 +92,14 @@ public class UpdateHandler : IUpdateHandler
                     case "/weather":
                         await botClient.SendTextMessageAsync(
                             chatId: chatId,
-                            text: "🌤️ Укажите город после команды:\n/weather Москва",
+                            text: "📍 Укажите город после команды:\n/weather Москва",
                             cancellationToken: cancellationToken);
                         break;
 
                     case "/forecast":
                         await botClient.SendTextMessageAsync(
                             chatId: chatId,
-                            text: "📊 Укажите город после команды:\n/forecast Москва",
+                            text: "📅 Укажите город после команды:\n/forecast Москва",
                             cancellationToken: cancellationToken);
                         break;
 
@@ -151,11 +146,11 @@ public class UpdateHandler : IUpdateHandler
     private async Task ShowMainMenu(long chatId, CancellationToken cancellationToken)
     {
         var menuText = "🌤️ Добро пожаловать в погодный бот!\n\n" +
-                      "Доступные команды:\n\n" +
+                      "Доступные команды:\n" +
                       "🏙️ /cities - Популярные города\n" +
                       "🌡️ /weather <город> - Текущая погода\n" +
-                      "📊 /forecast <город> - Прогноз на 5 дней\n" +
-                      "📍 Или просто отправьте название города";
+                      "📅 /forecast <город> - Прогноз на 5 дней\n" +
+                      "💬 Или просто отправьте название города";
 
         await _botClient.SendTextMessageAsync(
             chatId: chatId,
@@ -182,8 +177,8 @@ public class UpdateHandler : IUpdateHandler
                 InlineKeyboardButton.WithCallbackData("🏙️ Париж", "city_Paris"),
                 InlineKeyboardButton.WithCallbackData("🏙️ Стокгольм", "city_Stockholm")
             },
-            new[] 
-        {
+            new[]
+            {
             InlineKeyboardButton.WithCallbackData("🏙️ Бишкек", "city_Bishkek"),
             InlineKeyboardButton.WithCallbackData("🏙️ София", "city_Sofia")
         },
@@ -206,24 +201,54 @@ public class UpdateHandler : IUpdateHandler
         var chatId = callbackQuery.Message.Chat.Id;
         var data = callbackQuery.Data;
 
-        Console.WriteLine($"🔄 Callback received: {data}");
+        // СРАЗУ отвечаем на callback чтобы Telegram знал что запрос принят
+        await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
 
         if (data.StartsWith("city_"))
         {
-            var city = data.Substring(5); // Убираем "city_"
-            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
-            await HandleWeatherRequest(chatId, city, cancellationToken);
-        }
-        else if (data.StartsWith("forecast_"))
-        {
-            var city = data.Substring(9); // Убираем "forecast_"
-            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
-            await HandleForecastRequest(chatId, city, cancellationToken);
+            var city = data.Substring(5);
+            
+            // Запускаем обработку в фоне без ожидания
+            _ = Task.Run(async () => 
+            {
+                try
+                {
+                    await HandleWeatherRequest(chatId, city, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Background task error: {ex.Message}");
+                }
+            });
         }
         else if (data == "show_cities")
         {
-            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
-            await ShowCitiesMenu(chatId, cancellationToken);
+            _ = Task.Run(async () => 
+            {
+                try
+                {
+                    await ShowCitiesMenu(chatId, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Background task error: {ex.Message}");
+                }
+            });
+        }
+        else if (data.StartsWith("forecast_"))
+        {
+            var city = data.Substring(9);
+            _ = Task.Run(async () => 
+            {
+                try
+                {
+                    await HandleForecastRequest(chatId, city, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Background task error: {ex.Message}");
+                }
+            });
         }
     }
 
@@ -231,17 +256,12 @@ public class UpdateHandler : IUpdateHandler
     {
         try
         {
-            Console.WriteLine($"🌤️ Starting weather request for: {city}");
-
             await _botClient.SendChatActionAsync(chatId, ChatAction.Typing);
-
             var weather = await _weatherService.GetWeatherAsync(city);
-
-           // Console.WriteLine($"📊 Weather service returned: {weather != null}");
 
             if (weather != null && weather.Main != null)
             {
-               // Console.WriteLine($"✅ Weather data: {weather.Name}, Temp: {weather.Main.Temp}");
+                Console.WriteLine($"✅ Weather for {city}: {weather.Main.Temp}°C");
 
                 var response = $"🌤️ Погода в {weather.Name}:\n" +
                               $"🌡️ Температура: {weather.Main.Temp}°C\n" +
@@ -249,13 +269,12 @@ public class UpdateHandler : IUpdateHandler
                               $"💨 Ветер: {weather.Wind?.Speed:F1} м/с\n" +
                               $"☁️ {weather.Weather?[0].Description}";
 
-                // Добавляем кнопки для выбора другого города и прогноза
                 var keyboard = new InlineKeyboardMarkup(new[]
                 {
                     new[]
                     {
                         InlineKeyboardButton.WithCallbackData("🏙️ Другой город", "show_cities"),
-                        InlineKeyboardButton.WithCallbackData("📊 Прогноз на 5 дней", $"forecast_{city}")
+                        InlineKeyboardButton.WithCallbackData("📅 Прогноз на 5 дней", $"forecast_{city}")
                     }
                 });
 
@@ -267,10 +286,9 @@ public class UpdateHandler : IUpdateHandler
             }
             else
             {
-                Console.WriteLine($"❌ Weather data is null");
                 await _botClient.SendTextMessageAsync(
                     chatId: chatId,
-                    text: $"❌ Не удалось получить погоду для '{city}'. Попробуйте другой город.",
+                    $"❌ Не удалось получить погоду для '{city}'. Попробуйте другой город.",
                     cancellationToken: cancellationToken);
             }
         }
@@ -279,7 +297,7 @@ public class UpdateHandler : IUpdateHandler
             Console.WriteLine($"❌ HandleWeatherRequest error: {ex.Message}");
             await _botClient.SendTextMessageAsync(
                 chatId: chatId,
-                text: "❌ Ошибка получения данных о погоде. Попробуйте позже.",
+                "❌ Ошибка получения данных о погоде. Попробуйте позже.",
                 cancellationToken: cancellationToken);
         }
     }
@@ -288,16 +306,12 @@ public class UpdateHandler : IUpdateHandler
     {
         try
         {
-            Console.WriteLine($"📊 Starting 5-day forecast request for: {city}");
-
             await _botClient.SendChatActionAsync(chatId, ChatAction.Typing);
-
-            // Используем реальный API для прогноза на 5 дней
             var forecast = await _weatherService.GetWeatherForecastAsync(city);
 
             if (forecast != null)
             {
-                var response = $"📊 Прогноз погоды в {forecast.City} на 5 дней:\n\n" +
+                var response = $"📅 Прогноз погоды в {forecast.City} на 5 дней:\n\n" +
                               $"📅 {forecast.Day1} (завтра)\n" +
                               $"🌡️ {forecast.Temp1}°C, {forecast.Condition1}\n\n" +
                               $"📅 {forecast.Day2}\n" +
@@ -309,9 +323,10 @@ public class UpdateHandler : IUpdateHandler
                               $"📅 {forecast.Day5}\n" +
                               $"🌡️ {forecast.Temp5}°C, {forecast.Condition5}";
 
-                // Добавляем кнопку для возврата к городям
-                var keyboard = new InlineKeyboardMarkup(new[] {
-                    new[] {
+                var keyboard = new InlineKeyboardMarkup(new[]
+                {
+                    new[]
+                    {
                         InlineKeyboardButton.WithCallbackData("🏙️ Выбрать город", "show_cities")
                     }
                 });
@@ -326,7 +341,7 @@ public class UpdateHandler : IUpdateHandler
             {
                 await _botClient.SendTextMessageAsync(
                     chatId: chatId,
-                    text: $"❌ Не удалось получить прогноз для {city}",
+                    $"❌ Не удалось получить прогноз для {city}",
                     cancellationToken: cancellationToken);
             }
         }
@@ -335,16 +350,55 @@ public class UpdateHandler : IUpdateHandler
             Console.WriteLine($"❌ Forecast error: {ex.Message}");
             await _botClient.SendTextMessageAsync(
                 chatId: chatId,
-                text: "❌ Ошибка получения прогноза погоды",
+                "❌ Ошибка получения прогноза погоды",
                 cancellationToken: cancellationToken);
         }
     }
 
     public async Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
+        // Логируем Unauthorized только один раз
+        if (exception.Message.Contains("Unauthorized"))
+        {
+            if (!_unauthorizedLogged)
+            {
+                Console.WriteLine($"❌ BOT TOKEN ERROR: Telegram Bot Token is invalid or revoked.");
+                Console.WriteLine($"❌ Please create a new bot in @BotFather and update the TelegramBotSettings__BotToken environment variable in Render.com");
+                _unauthorizedLogged = true;
+            }
+            await Task.CompletedTask;
+            return;
+        }
+        
+        // Для других ошибок - нормальное логирование
         Console.WriteLine($"❌ Telegram Polling Error: {exception.Message}");
         await Task.CompletedTask;
     }
+}
+
+// Модель для прогноза погоды
+public class WeatherForecast
+{
+    public string? City { get; set; }
+    public string? Day1 { get; set; }
+    public double Temp1 { get; set; }
+    public string? Condition1 { get; set; }
+
+    public string? Day2 { get; set; }
+    public double Temp2 { get; set; }
+    public string? Condition2 { get; set; }
+
+    public string? Day3 { get; set; }
+    public double Temp3 { get; set; }
+    public string? Condition3 { get; set; }
+
+    public string? Day4 { get; set; }
+    public double Temp4 { get; set; }
+    public string? Condition4 { get; set; }
+
+    public string? Day5 { get; set; }
+    public double Temp5 { get; set; }
+    public string? Condition5 { get; set; }
 }
 
 
