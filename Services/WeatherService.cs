@@ -21,14 +21,11 @@ public class WeatherService : IWeatherService
         try
         {
             var url = $"{_baseUrl}current.json?key={_apiKey}&q={city}";
-            Console.WriteLine($"📍 Requesting current weather: {url}");
-
             var response = await _httpClient.GetAsync(url);
 
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
-
                 var weatherData = JsonSerializer.Deserialize<WeatherApiResponse>(json, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
@@ -36,7 +33,7 @@ public class WeatherService : IWeatherService
 
                 if (weatherData?.location != null && weatherData.current != null)
                 {
-                    Console.WriteLine($"✅ Current weather - City: {weatherData.location.name}, Temp: {weatherData.current.temp_c}°C");
+                    Console.WriteLine($"✅ Weather data for {weatherData.location.name}: {weatherData.current.temp_c}°C");
 
                     return new WeatherResponse
                     {
@@ -47,7 +44,7 @@ public class WeatherService : IWeatherService
                             Humidity = weatherData.current.humidity,
                             Feels_Like = weatherData.current.feelslike_c
                         },
-                        Weather = new[] 
+                        Weather = new[]
                         {
                             new Weather
                             {
@@ -61,7 +58,10 @@ public class WeatherService : IWeatherService
                     };
                 }
             }
-            Console.WriteLine($"❌ API error: {response.StatusCode}");
+            else
+            {
+                Console.WriteLine($"❌ Weather API returned: {response.StatusCode}");
+            }
             return null;
         }
         catch (Exception ex)
@@ -75,17 +75,12 @@ public class WeatherService : IWeatherService
     {
         try
         {
-            // Запрашиваем прогноз на 5 дней
             var url = $"{_baseUrl}forecast.json?key={_apiKey}&q={city}&days=5";
-            Console.WriteLine($"📊 Requesting 5-day forecast: {url}");
-
             var response = await _httpClient.GetAsync(url);
 
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"📊 Forecast JSON received");
-
                 var forecastData = JsonSerializer.Deserialize<ForecastApiResponse>(json, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
@@ -99,7 +94,7 @@ public class WeatherService : IWeatherService
                     var day4 = forecastData.forecast.forecastday[3];
                     var day5 = forecastData.forecast.forecastday[4];
 
-                    Console.WriteLine($"✅ Forecast parsed for: {forecastData.location?.name}");
+                    Console.WriteLine($"✅ 5-day forecast for: {forecastData.location?.name}");
 
                     return new WeatherForecast
                     {
@@ -125,9 +120,17 @@ public class WeatherService : IWeatherService
                         Condition5 = day5.day.condition?.text
                     };
                 }
+                else
+                {
+                    Console.WriteLine($"❌ Forecast data structure is invalid");
+                    return null;
+                }
             }
-            Console.WriteLine($"❌ Forecast API error: {response.StatusCode}");
-            return null;
+            else
+            {
+                Console.WriteLine($"❌ Forecast API returned: {response.StatusCode}");
+                return null;
+            }
         }
         catch (Exception ex)
         {
@@ -135,65 +138,65 @@ public class WeatherService : IWeatherService
             return null;
         }
     }
+
+    // Модели для текущей погоды
+    public class WeatherApiResponse
+    {
+        public Location? location { get; set; }
+        public Current? current { get; set; }
+    }
+
+    public class Location
+    {
+        public string? name { get; set; }
+    }
+
+    public class Current
+    {
+        public double temp_c { get; set; }
+        public int humidity { get; set; }
+        public double feelslike_c { get; set; }
+        public double wind_kph { get; set; }
+        public Condition? condition { get; set; }
+    }
+
+    public class Condition
+    {
+        public string? text { get; set; }
+    }
+
+    // Модели для прогноза погоды
+    public class ForecastApiResponse
+    {
+        public ForecastLocation? location { get; set; }
+        public ForecastData? forecast { get; set; }
+    }
+
+    public class ForecastLocation
+    {
+        public string? name { get; set; }
+    }
+
+    public class ForecastData
+    {
+        public ForecastDay[]? forecastday { get; set; }
+    }
+
+    public class ForecastDay
+    {
+        public string? date { get; set; }
+        public DayData? day { get; set; }
+    }
+
+    public class DayData
+    {
+        public double maxtemp_c { get; set; }
+        public double mintemp_c { get; set; }
+        public Condition? condition { get; set; }
+    }
 }
 
-// Модели для текущей погоды
-public class WeatherApiResponse
-{
-    public Location? location { get; set; }
-    public Current? current { get; set; }
-}
-
-public class Location
-{
-    public string? name { get; set; }
-}
-
-public class Current
-{
-    public double temp_c { get; set; }
-    public int humidity { get; set; }
-    public double feelslike_c { get; set; }
-    public double wind_kph { get; set; }
-    public Condition? condition { get; set; }
-}
-
-public class Condition
-{
-    public string? text { get; set; }
-}
-
-// Модели для прогноза погоды
-public class ForecastApiResponse
-{
-    public ForecastLocation? location { get; set; }
-    public ForecastData? forecast { get; set; }
-}
-
-public class ForecastLocation
-{
-    public string? name { get; set; }
-}
-
-public class ForecastData
-{
-    public ForecastDay[]? forecastday { get; set; }
-}
-
-public class ForecastDay
-{
-    public string? date { get; set; }
-    public DayData? day { get; set; }
-}
-
-public class DayData
-{
-    public double maxtemp_c { get; set; }
-    public double mintemp_c { get; set; }
-    public Condition? condition { get; set; }
-}
-
-// Модель для прогноза (используется в Program.cs)
+// Модель для прогноза (вынесена за пределы класса WeatherService)
 public class WeatherForecast
 {
     public string? City { get; set; }
