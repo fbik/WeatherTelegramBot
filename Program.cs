@@ -15,6 +15,8 @@ builder.Services.AddSingleton<ITelegramBotClient>(provider =>
 {
     var token = builder.Configuration["TelegramBotSettings:BotToken"];
 
+    Console.WriteLine($"My token live {token}" );
+
     if (string.IsNullOrEmpty(token) || token == "YOUR_BOT_TOKEN_HERE")
     {
         throw new ArgumentNullException(nameof(token), "Bot token is not configured");
