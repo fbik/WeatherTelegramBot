@@ -1,8 +1,8 @@
-using Telegram.Bot;
+ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups;
+using Telegram.Bot.Types.ReplyMarkups; // ← ДОБАВЬТЕ ЭТУ СТРОКУ
 using WeatherTelegramBot.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,7 +15,6 @@ builder.Services.AddSingleton<ITelegramBotClient>(provider =>
 {
     var token = builder.Configuration["TelegramBotSettings:BotToken"];
 
-    Console.WriteLine($"My token live {token}" );
 
     if (string.IsNullOrEmpty(token) || token == "YOUR_BOT_TOKEN_HERE")
     {
@@ -55,14 +54,14 @@ botClient.StartReceiving(
     pollingErrorHandler: updateHandler.HandlePollingErrorAsync,
     receiverOptions: receiverOptions
 );
-Console.WriteLine("✅ Bot started with Polling, Buttons and 5-Day Forecast!");
+Console.WriteLine("✅ Bot started with Polling and Buttons!");
 app.Run();
 
 public class UpdateHandler : IUpdateHandler
 {
     private readonly ITelegramBotClient _botClient;
     private readonly IWeatherService _weatherService;
-    private static bool _unauthorizedLogged = false; // Статическая переменная для однократного логирования
+    private static bool _unauthorizedLogged = false;
 
     public UpdateHandler(ITelegramBotClient botClient, IWeatherService weatherService)
     {
@@ -151,8 +150,9 @@ public class UpdateHandler : IUpdateHandler
                       "Доступные команды:\n" +
                       "🏙️ /cities - Популярные города\n" +
                       "🌡️ /weather <город> - Текущая погода\n" +
-                      "📅 /forecast <город> - Прогноз на 5 дней\n" +
-                      "💬 Или просто отправьте название города";
+                      "📅 /forecast <город> - Прогноз на завтра\n" +
+                      "💬 Или просто отправьте название города\n\n" +
+                      "ℹ️ Используется бесплатный тариф WeatherAPI";
 
         await _botClient.SendTextMessageAsync(
             chatId: chatId,
@@ -176,14 +176,14 @@ public class UpdateHandler : IUpdateHandler
             },
             new[]
             {
-                InlineKeyboardButton.WithCallbackData("🏙️ Париж", "city_Paris"),
-                InlineKeyboardButton.WithCallbackData("🏙️ Стокгольм", "city_Stockholm")
-            },
-            new[]
-            {
             InlineKeyboardButton.WithCallbackData("🏙️ Бишкек", "city_Bishkek"),
             InlineKeyboardButton.WithCallbackData("🏙️ София", "city_Sofia")
         },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("🏙️ Париж", "city_Paris"),
+                InlineKeyboardButton.WithCallbackData("🏙️ Стокгольм", "city_Stockholm")
+            },
             new[]
             {
                 InlineKeyboardButton.WithCallbackData("🏙️ Дубай", "city_Dubai"),
@@ -276,7 +276,7 @@ public class UpdateHandler : IUpdateHandler
                     new[]
                     {
                         InlineKeyboardButton.WithCallbackData("🏙️ Другой город", "show_cities"),
-                        InlineKeyboardButton.WithCallbackData("📅 Прогноз на 5 дней", $"forecast_{city}")
+                        InlineKeyboardButton.WithCallbackData("📅 Прогноз на завтра", $"forecast_{city}")
                     }
                 });
 
@@ -313,17 +313,14 @@ public class UpdateHandler : IUpdateHandler
 
             if (forecast != null)
             {
-                var response = $"📅 Прогноз погоды в {forecast.City} на 5 дней:\n\n" +
-                              $"📅 {forecast.Day1} (завтра)\n" +
+                var response = $"📅 Прогноз погоды в {forecast.City}:\n\n" +
+                              $"📅 {forecast.Day1}\n" +
                               $"🌡️ {forecast.Temp1}°C, {forecast.Condition1}\n\n" +
                               $"📅 {forecast.Day2}\n" +
-                              $"🌡️ {forecast.Temp2}°C, {forecast.Condition2}\n\n" +
+                              $"🌡️ {forecast.Condition2}\n\n" +
                               $"📅 {forecast.Day3}\n" +
-                              $"🌡️ {forecast.Temp3}°C, {forecast.Condition3}\n\n" +
-                              $"📅 {forecast.Day4}\n" +
-                              $"🌡️ {forecast.Temp4}°C, {forecast.Condition4}\n\n" +
-                              $"📅 {forecast.Day5}\n" +
-                              $"🌡️ {forecast.Temp5}°C, {forecast.Condition5}";
+                              $"🌡️ {forecast.Condition3}\n\n" +
+                              $"ℹ️ Бесплатный тариф WeatherAPI предоставляет только прогноз на завтра";
 
                 var keyboard = new InlineKeyboardMarkup(new[]
                 {
@@ -359,7 +356,7 @@ public class UpdateHandler : IUpdateHandler
 
     public async Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
-        // Логируем Unauthorized только один раз
+
         if (exception.Message.Contains("Unauthorized"))
         {
             if (!_unauthorizedLogged)
@@ -371,8 +368,8 @@ public class UpdateHandler : IUpdateHandler
             await Task.CompletedTask;
             return;
         }
+
         
-        // Для других ошибок - нормальное логирование
         Console.WriteLine($"❌ Telegram Polling Error: {exception.Message}");
         await Task.CompletedTask;
     }

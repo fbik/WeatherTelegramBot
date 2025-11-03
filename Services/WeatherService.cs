@@ -75,7 +75,10 @@ public class WeatherService : IWeatherService
     {
         try
         {
-            var url = $"{_baseUrl}forecast.json?key={_apiKey}&q={city}&days=5";
+            // БЕСПЛАТНЫЙ ТАРИФ: используем days=1 (максимум для бесплатного)
+            var url = $"{_baseUrl}forecast.json?key={_apiKey}&q={city}&days=1";
+            Console.WriteLine($"📍 Requesting 1-day forecast (free tier): {url}");
+            
             var response = await _httpClient.GetAsync(url);
 
             if (response.IsSuccessStatusCode)
@@ -86,49 +89,47 @@ public class WeatherService : IWeatherService
                     PropertyNameCaseInsensitive = true
                 });
 
-                if (forecastData?.forecast?.forecastday != null && forecastData.forecast.forecastday.Length >= 5)
+                if (forecastData?.forecast?.forecastday != null && forecastData.forecast.forecastday.Length >= 1)
                 {
-                    var day1 = forecastData.forecast.forecastday[0];
-                    var day2 = forecastData.forecast.forecastday[1];
-                    var day3 = forecastData.forecast.forecastday[2];
-                    var day4 = forecastData.forecast.forecastday[3];
-                    var day5 = forecastData.forecast.forecastday[4];
+                    var tomorrow = forecastData.forecast.forecastday[0];
 
-                    Console.WriteLine($"✅ 5-day forecast for: {forecastData.location?.name}");
+                    Console.WriteLine($"✅ Tomorrow's forecast for: {forecastData.location?.name}");
 
+                    // Для бесплатного тарифа показываем только завтрашний день
                     return new WeatherForecast
                     {
                         City = forecastData.location?.name ?? city,
-                        Day1 = DateTime.Parse(day1.date).ToString("dd.MM"),
-                        Temp1 = day1.day.maxtemp_c,
-                        Condition1 = day1.day.condition?.text,
+                        Day1 = "Завтра",
+                        Temp1 = tomorrow.day.maxtemp_c,
+                        Condition1 = tomorrow.day.condition?.text,
 
-                        Day2 = DateTime.Parse(day2.date).ToString("dd.MM"),
-                        Temp2 = day2.day.maxtemp_c,
-                        Condition2 = day2.day.condition?.text,
+                        // Остальные дни не доступны в бесплатном тарифе
+                        Day2 = "-",
+                        Temp2 = 0,
+                        Condition2 = "Недоступно в бесплатном тарифе",
 
-                        Day3 = DateTime.Parse(day3.date).ToString("dd.MM"),
-                        Temp3 = day3.day.maxtemp_c,
-                        Condition3 = day3.day.condition?.text,
+                        Day3 = "-",
+                        Temp3 = 0, 
+                        Condition3 = "Недоступно в бесплатном тарифе",
 
-                        Day4 = DateTime.Parse(day4.date).ToString("dd.MM"),
-                        Temp4 = day4.day.maxtemp_c,
-                        Condition4 = day4.day.condition?.text,
+                        Day4 = "",
+                        Temp4 = 0,
+                        Condition4 = "",
 
-                        Day5 = DateTime.Parse(day5.date).ToString("dd.MM"),
-                        Temp5 = day5.day.maxtemp_c,
-                        Condition5 = day5.day.condition?.text
+                        Day5 = "",
+                        Temp5 = 0,
+                        Condition5 = ""
                     };
                 }
                 else
                 {
-                    Console.WriteLine($"❌ Forecast data structure is invalid");
+                    Console.WriteLine($"❌ No forecast data received");
                     return null;
                 }
             }
             else
             {
-                Console.WriteLine($"❌ Forecast API returned: {response.StatusCode}");
+                Console.WriteLine($"❌ Forecast API error: {response.StatusCode}");
                 return null;
             }
         }
@@ -196,7 +197,7 @@ public class WeatherService : IWeatherService
     }
 }
 
-// Модель для прогноза (вынесена за пределы класса WeatherService)
+// Модель для прогноза
 public class WeatherForecast
 {
     public string? City { get; set; }
@@ -220,3 +221,4 @@ public class WeatherForecast
     public double Temp5 { get; set; }
     public string? Condition5 { get; set; }
 }
+
