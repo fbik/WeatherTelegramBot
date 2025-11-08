@@ -1,20 +1,21 @@
- using Telegram.Bot;
+using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups; // ← ДОБАВЬТЕ ЭТУ СТРОКУ
+using Telegram.Bot.Types.ReplyMarkups;
 using WeatherTelegramBot.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Добавьте сервисы в контейнер
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IWeatherService, WeatherService>();
 
+// Регистрация Telegram Bot Client
 builder.Services.AddSingleton<ITelegramBotClient>(provider =>
 {
     var token = builder.Configuration["TelegramBotSettings:BotToken"];
-
 
     if (string.IsNullOrEmpty(token) || token == "YOUR_BOT_TOKEN_HERE")
     {
@@ -30,6 +31,7 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -40,8 +42,42 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
-app.MapGet("/", () => "Weather Telegram Bot is running!");
+// ✅ ФИКС для мониторинга - улучшенная обработка GET запросов
+app.MapGet("/", async context =>
+{
+    context.Response.ContentType = "text/plain";
+    context.Response.StatusCode = 200;
+    await context.Response.WriteAsync("✅ Weather Telegram Bot is running!\n\n" +
+                                     $"🕒 Server Time: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC\n" +
+                                     "🔧 Status: Operational\n" +
+                                     "🤖 Mode: Polling");
+});
 
+// ✅ Health-check endpoint для мониторинга
+app.MapGet("/health", async context =>
+{
+    context.Response.ContentType = "application/json";
+    context.Response.StatusCode = 200;
+    await context.Response.WriteAsync(
+        $$"""
+        {
+            "status": "healthy",
+            "service": "Weather Telegram Bot",
+            "timestamp": "{{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}}",
+            "version": "1.0",
+            "mode": "polling"
+        }
+        """);
+});
+
+// ✅ Обработка HEAD запросов (для мониторинга)
+app.MapMethods("/", new[] { "HEAD" }, async context =>
+{
+    context.Response.StatusCode = 200;
+    await context.Response.CompleteAsync();
+});
+
+// Запуск бота
 var botClient = app.Services.GetRequiredService<ITelegramBotClient>();
 var updateHandler = app.Services.GetRequiredService<UpdateHandler>();
 var receiverOptions = new ReceiverOptions
@@ -54,6 +90,7 @@ botClient.StartReceiving(
     pollingErrorHandler: updateHandler.HandlePollingErrorAsync,
     receiverOptions: receiverOptions
 );
+
 Console.WriteLine("✅ Bot started with Polling and Buttons!");
 app.Run();
 
@@ -164,32 +201,31 @@ public class UpdateHandler : IUpdateHandler
     {
         var keyboard = new InlineKeyboardMarkup(new[]
         {
-            new[]
-            {
-                InlineKeyboardButton.WithCallbackData("🏙️ Москва", "city_Moscow"),
-                InlineKeyboardButton.WithCallbackData("🏙️ СПб", "city_St Petersburg")
-            },
-            new[]
-            {
-                InlineKeyboardButton.WithCallbackData("🏙️ Нью-Йорк", "city_New York"),
-                InlineKeyboardButton.WithCallbackData("🏙️ Лондон", "city_London")
-            },
-            new[]
-            {
-            InlineKeyboardButton.WithCallbackData("🏙️ Бишкек", "city_Bishkek"),
-            InlineKeyboardButton.WithCallbackData("🏙️ София", "city_Sofia")
+        new[]
+        {
+            InlineKeyboardButton.WithCallbackData("🏙️ Москва", "city_Moscow"),
+            InlineKeyboardButton.WithCallbackData("🏙️ СПб", "city_St Petersburg"),
+            InlineKeyboardButton.WithCallbackData("🏙️ Воронеж", "city_Voronezh")
         },
-            new[]
-            {
-                InlineKeyboardButton.WithCallbackData("🏙️ Париж", "city_Paris"),
-                InlineKeyboardButton.WithCallbackData("🏙️ Стокгольм", "city_Stockholm")
-            },
-            new[]
-            {
-                InlineKeyboardButton.WithCallbackData("🏙️ Дубай", "city_Dubai"),
-                InlineKeyboardButton.WithCallbackData("🏙️ Воронеж", "city_Voronezh")
-            }
-        });
+        new[]
+        {
+            InlineKeyboardButton.WithCallbackData("🏙️ Нью-Йорк", "city_New York"),
+            InlineKeyboardButton.WithCallbackData("🏙️ Лондон", "city_London"),
+            InlineKeyboardButton.WithCallbackData("🏙️ Париж", "city_Paris")
+        },
+        new[]
+        {
+            InlineKeyboardButton.WithCallbackData("🏙️ Бишкек", "city_Bishkek"),
+            InlineKeyboardButton.WithCallbackData("🏙️ София", "city_Sofia"),
+            InlineKeyboardButton.WithCallbackData("🏙️ Стокгольм", "city_Stockholm")
+        },
+        new[]
+        {
+            InlineKeyboardButton.WithCallbackData("🏙️ Дубай", "city_Dubai"),
+            InlineKeyboardButton.WithCallbackData("🏙️ Каир", "city_Cairo"),
+            InlineKeyboardButton.WithCallbackData("🏙️ Дамаск", "city_Damascus")
+        }
+    });
 
         await _botClient.SendTextMessageAsync(
             chatId: chatId,
@@ -356,7 +392,6 @@ public class UpdateHandler : IUpdateHandler
 
     public async Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
-
         if (exception.Message.Contains("Unauthorized"))
         {
             if (!_unauthorizedLogged)
@@ -369,7 +404,6 @@ public class UpdateHandler : IUpdateHandler
             return;
         }
 
-        
         Console.WriteLine($"❌ Telegram Polling Error: {exception.Message}");
         await Task.CompletedTask;
     }
@@ -399,5 +433,3 @@ public class WeatherForecast
     public double Temp5 { get; set; }
     public string? Condition5 { get; set; }
 }
-
-
