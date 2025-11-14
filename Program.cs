@@ -78,20 +78,25 @@ app.MapMethods("/", new[] { "HEAD" }, async context =>
 });
 
 // Запуск бота
-var botClient = app.Services.GetRequiredService<ITelegramBotClient>();
-var updateHandler = app.Services.GetRequiredService<UpdateHandler>();
-var receiverOptions = new ReceiverOptions
+// ✅ ИСПРАВЛЕННЫЙ ЗАПУСК БОТА - создаем scope для scoped сервисов
+using (var scope = app.Services.CreateScope())
 {
-    AllowedUpdates = new[] { UpdateType.Message, UpdateType.CallbackQuery }
-};
+    var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
+    var updateHandler = scope.ServiceProvider.GetRequiredService<UpdateHandler>();
+    var receiverOptions = new ReceiverOptions
+    {
+        AllowedUpdates = new[] { UpdateType.Message, UpdateType.CallbackQuery }
+    };
 
-botClient.StartReceiving(
-    updateHandler: updateHandler.HandleUpdateAsync,
-    pollingErrorHandler: updateHandler.HandlePollingErrorAsync,
-    receiverOptions: receiverOptions
-);
+    botClient.StartReceiving(
+        updateHandler: updateHandler.HandleUpdateAsync,
+        pollingErrorHandler: updateHandler.HandlePollingErrorAsync,
+        receiverOptions: receiverOptions
+    );
 
-Console.WriteLine("✅ Bot started with Polling and Buttons!");
+    Console.WriteLine("✅ Bot started with Polling and Buttons!");
+}
+
 app.Run();
 
 public class UpdateHandler : IUpdateHandler
