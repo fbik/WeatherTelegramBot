@@ -39,4 +39,5 @@ publish/
 # API keys and secrets
 key.txt
 *.key
-*.secret
+*.secretappsettings.json
+appsettings.json
