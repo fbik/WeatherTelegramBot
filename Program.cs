@@ -77,27 +77,26 @@ app.MapMethods("/", new[] { "HEAD" }, async context =>
     await context.Response.CompleteAsync();
 });
 
-// Запуск бота
-// ✅ ИСПРАВЛЕННЫЙ ЗАПУСК БОТА - создаем scope для scoped сервисов
-using (var scope = app.Services.CreateScope())
+// ✅ ИСПРАВЛЕННЫЙ ЗАПУСК БОТА - без using, scope не уничтожается
+var scope = app.Services.CreateScope();
+var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
+var updateHandler = scope.ServiceProvider.GetRequiredService<UpdateHandler>();
+var receiverOptions = new ReceiverOptions
 {
-    var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
-    var updateHandler = scope.ServiceProvider.GetRequiredService<UpdateHandler>();
-    var receiverOptions = new ReceiverOptions
-    {
-        AllowedUpdates = new[] { UpdateType.Message, UpdateType.CallbackQuery }
-    };
+    AllowedUpdates = new[] { UpdateType.Message, UpdateType.CallbackQuery }
+};
 
-    botClient.StartReceiving(
-        updateHandler: updateHandler.HandleUpdateAsync,
-        pollingErrorHandler: updateHandler.HandlePollingErrorAsync,
-        receiverOptions: receiverOptions
-    );
+botClient.StartReceiving(
+    updateHandler: updateHandler.HandleUpdateAsync,
+    pollingErrorHandler: updateHandler.HandlePollingErrorAsync,
+    receiverOptions: receiverOptions
+);
 
-    Console.WriteLine("✅ Bot started with Polling and Buttons!");
-}
+Console.WriteLine("✅ Bot started with Polling and Buttons!");
 
 app.Run();
+
+// Остальной код UpdateHandler и WeatherForecast остается без изменений
 
 public class UpdateHandler : IUpdateHandler
 {
@@ -133,14 +132,14 @@ public class UpdateHandler : IUpdateHandler
                         break;
 
                     case "/weather":
-                        await botClient.SendTextMessageAsync(
+                        await _botClient.SendTextMessageAsync(
                             chatId: chatId,
-                            text: "📍 Укажите город после команды:\n/weather Москва",
+                            text: "�� Укажите город после команды:\n/weather Москва",
                             cancellationToken: cancellationToken);
                         break;
 
                     case "/forecast":
-                        await botClient.SendTextMessageAsync(
+                        await _botClient.SendTextMessageAsync(
                             chatId: chatId,
                             text: "📅 Укажите город после команды:\n/forecast Москва",
                             cancellationToken: cancellationToken);
@@ -163,7 +162,7 @@ public class UpdateHandler : IUpdateHandler
                     default:
                         if (text.StartsWith("/"))
                         {
-                            await botClient.SendTextMessageAsync(
+                            await _botClient.SendTextMessageAsync(
                                 chatId: chatId,
                                 text: "❌ Неизвестная команда. Используйте /start для списка команд",
                                 cancellationToken: cancellationToken);
@@ -177,7 +176,7 @@ public class UpdateHandler : IUpdateHandler
             }
             catch (Exception ex)
             {
-                await botClient.SendTextMessageAsync(
+                await _botClient.SendTextMessageAsync(
                     chatId: chatId,
                     text: "❌ Произошла ошибка. Попробуйте позже.",
                     cancellationToken: cancellationToken);
@@ -206,31 +205,31 @@ public class UpdateHandler : IUpdateHandler
     {
         var keyboard = new InlineKeyboardMarkup(new[]
         {
-        new[]
-        {
-            InlineKeyboardButton.WithCallbackData("🏙️ Москва", "city_Moscow"),
-            InlineKeyboardButton.WithCallbackData("🏙️ СПб", "city_St Petersburg"),
-            InlineKeyboardButton.WithCallbackData("🏙️ Воронеж", "city_Voronezh")
-        },
-        new[]
-        {
-            InlineKeyboardButton.WithCallbackData("🏙️ Нью-Йорк", "city_New York"),
-            InlineKeyboardButton.WithCallbackData("🏙️ Лондон", "city_London"),
-            InlineKeyboardButton.WithCallbackData("🏙️ Париж", "city_Paris")
-        },
-        new[]
-        {
-            InlineKeyboardButton.WithCallbackData("🏙️ Бишкек", "city_Bishkek"),
-            InlineKeyboardButton.WithCallbackData("🏙️ София", "city_Sofia"),
-            InlineKeyboardButton.WithCallbackData("🏙️ Стокгольм", "city_Stockholm")
-        },
-        new[]
-        {
-            InlineKeyboardButton.WithCallbackData("🏙️ Дубай", "city_Dubai"),
-            InlineKeyboardButton.WithCallbackData("🏙️ Каир", "city_Cairo"),
-            InlineKeyboardButton.WithCallbackData("🏙️ Дамаск", "city_Damascus")
-        }
-    });
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("🏙️ Москва", "city_Moscow"),
+                InlineKeyboardButton.WithCallbackData("🏙️ СПб", "city_St Petersburg"),
+                InlineKeyboardButton.WithCallbackData("🏙️ Воронеж", "city_Voronezh")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("🏙️ Нью-Йорк", "city_New York"),
+                InlineKeyboardButton.WithCallbackData("🏙️ Лондон", "city_London"),
+                InlineKeyboardButton.WithCallbackData("🏙️ Париж", "city_Paris")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("🏙️ Бишкек", "city_Bishkek"),
+                InlineKeyboardButton.WithCallbackData("🏙️ София", "city_Sofia"),
+                InlineKeyboardButton.WithCallbackData("🏙️ Стокгольм", "city_Stockholm")
+            },
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("🏙️ Дубай", "city_Dubai"),
+                InlineKeyboardButton.WithCallbackData("🏙️ Каир", "city_Cairo"),
+                InlineKeyboardButton.WithCallbackData("🏙️ Дамаск", "city_Damascus")
+            }
+        });
 
         await _botClient.SendTextMessageAsync(
             chatId: chatId,
@@ -438,3 +437,4 @@ public class WeatherForecast
     public double Temp5 { get; set; }
     public string? Condition5 { get; set; }
 }
+
