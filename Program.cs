@@ -77,7 +77,7 @@ app.MapMethods("/", new[] { "HEAD" }, async context =>
     await context.Response.CompleteAsync();
 });
 
-// ✅ ИСПРАВЛЕННЫЙ ЗАПУСК БОТА - без using, scope не уничтожается
+// ✅ ИСПРАВЛЕННЫЙ ЗАПУСК БОТА - запускаем в фоне и держим приложение alive
 var scope = app.Services.CreateScope();
 var botClient = scope.ServiceProvider.GetRequiredService<ITelegramBotClient>();
 var updateHandler = scope.ServiceProvider.GetRequiredService<UpdateHandler>();
@@ -86,6 +86,7 @@ var receiverOptions = new ReceiverOptions
     AllowedUpdates = new[] { UpdateType.Message, UpdateType.CallbackQuery }
 };
 
+// Запускаем бота в фоне
 botClient.StartReceiving(
     updateHandler: updateHandler.HandleUpdateAsync,
     pollingErrorHandler: updateHandler.HandlePollingErrorAsync,
@@ -94,6 +95,7 @@ botClient.StartReceiving(
 
 Console.WriteLine("✅ Bot started with Polling and Buttons!");
 
+// ✅ ВАЖНО: Запускаем веб-сервер который держит приложение alive
 app.Run();
 
 // Остальной код UpdateHandler и WeatherForecast остается без изменений
